@@ -1,102 +1,50 @@
 package api
 
 import (
+	"bookorder/internal/datatypes"
+	"bookorder/internal/db"
+	"encoding/json"
 	"fmt"
-	"github.com/gorilla/mux"
-	"go.mau.fi/whatsmeow"
 	"net/http"
-	"time"
-	"wconnect/internal/db"
-	"wconnect/internal/whatspp"
+	"strconv"
 )
 
-func HandleConnect(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	userID := vars["userid"]
-	jid, err := db.GetJid(userID)
-	fmt.Println("jid", jid, err)
+func HandleOrderBook(w http.ResponseWriter, r *http.Request) {
+	symbol := r.URL.Query().Get("symbol")
 
-	//if err != nil {
-	//	fmt.Println(err)
-	//	w.WriteHeader(http.StatusInternalServerError)
-	//	return
-	//}
+	limitStr := r.URL.Query().Get("limit")
+	limit := 100 //for default value
 
-	client, qrCode, LinkErr := whatspp.LinkToWhatsApp(jid)
-
-	if LinkErr == nil {
-		fmt.Println("in save jid ", userID)
-
-		// if connected user before
-		if client.Store.ID != nil {
-			w.WriteHeader(200)
-			w.Write([]byte("connected to whatsapp successfully !"))
-			return
-		}
-		// but if don't connected yet
-		if client.Store.ID == nil {
-			w.Write([]byte(*qrCode))
-			go waitForClientConnecting(userID, client)
+	if limitStr != "" {
+		parsedLimit, err := strconv.Atoi(limitStr)
+		if err != nil {
+			// Handle the case where "limit" is not a valid integer.
+			http.Error(w, "Invalid limit parameter. It must be an integer.", http.StatusBadRequest)
 			return
 		}
 
-	}
-	if LinkErr != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-}
-
-func waitForClientConnecting(userID string, client *whatsmeow.Client) {
-	println("in the wait function")
-	// Get the current time.
-	startTime := time.Now()
-	// Calculate the time 60 seconds from now.
-	finishTime := startTime.Add(time.Second * 1200)
-
-	fmt.Println(client.Store.ID)
-	for client.Store.ID == nil {
-		// Get the current time.
-		now := time.Now()
-
-		if now.After(finishTime) {
-			fmt.Println("client with user id of ", userID, "disconnected because of time out")
-			client.Disconnect()
+		// Check if the parsed limit is within the valid range (less than 5000).
+		if parsedLimit <= 0 || parsedLimit > 5000 {
+			http.Error(w, "Invalid limit parameter. It must be between 1 and 5000.", http.StatusBadRequest)
 			return
 		}
+
+		// If all checks pass, use the parsed limit.
+		limit = parsedLimit
 	}
 
-	saveErr := db.SaveJid(userID, *client.Store.ID)
-	//client.Disconnect()
-	if saveErr == nil {
-		fmt.Println("saving jid successfully")
-		return
-	} else {
-		fmt.Println("save error")
-		return
-	}
-}
+	// Your code to process the "symbol" and "limit" parameters goes here.
+	fmt.Println(w, "Symbol: %s, Limit: %d\n", symbol, limit)
 
-func HandleStatus(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	userID := vars["userid"]
-	jid, err := db.GetJid(userID)
+	buyOrders, sellOrders, lastUpdateID := db.GetSymbolOrder(symbol, limit)
 
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+	response := datatypes.Response{
+		LastUpdateID: lastUpdateID,
+		Bids:         datatypes.FormatOrders(buyOrders),
+		Asks:         datatypes.FormatOrders(sellOrders),
 	}
-	if &jid != nil {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("It has already tried to connect to WhatsApp jid is:"))
-		_, _ = w.Write([]byte(jid.String()))
 
-		return
-	} else {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("not connected to Whatsapp"))
-		return
-	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 
 }

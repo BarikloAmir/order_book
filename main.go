@@ -1,27 +1,26 @@
 package main
 
 import (
+	"bookorder/internal/kafka"
 	"fmt"
-	"github.com/gorilla/mux"
-	_ "github.com/lib/pq"
-	_ "github.com/mattn/go-sqlite3"
-	_ "go.mau.fi/whatsmeow/types"
 	"log"
 	"net/http"
-	"wconnect/internal/api"
-	"wconnect/internal/db"
+
+	"bookorder/internal/api"
+	"bookorder/internal/db"
+
+	"github.com/gorilla/mux"
 )
 
 func main() {
-	fmt.Println("start")
+	fmt.Println("start server ...")
 
 	db.InitDatabase()
+	go kafka.InitKafka()
 
 	r := mux.NewRouter()
-	fmt.Println(r)
 
-	r.HandleFunc("/connect/{userid}", api.HandleConnect).Methods("POST")
-	r.HandleFunc("/status/{userid}", api.HandleStatus).Methods("GET")
+	r.HandleFunc("/OrderBook", api.HandleOrderBook).Methods("GET")
 
-	log.Fatal(http.ListenAndServe(":8080", r))
+	log.Fatal(http.ListenAndServe("localhost:8080", r))
 }
