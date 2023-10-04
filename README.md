@@ -1,6 +1,3 @@
-Certainly! Here's a sample README file for your "Order-Book" project:
-
----
 
 # Order-Book Project
 
