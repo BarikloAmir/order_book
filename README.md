@@ -29,7 +29,6 @@ The project's main function, defined in `main.go`, initializes and starts the se
 
 ```go
 func main() {
-    fmt.Println("start server ...")
 
     // Initialize the database
     db.InitDatabase()
